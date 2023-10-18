@@ -236,17 +236,18 @@ type Configuration struct {
 	} `toml:"telegram"`
 }
 
-// GetConfiguration returns the configuration object
+// GetConfiguration 返回 configuration 对象
 func (s *Session) GetConfiguration() (err error) {
 
+	// 读取 ConfigFilePath
 	cb, err := ioutil.ReadFile(*s.Options.ConfigFilePath)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Error reading configuration file %s: %s", *s.Options.ConfigFilePath, err))
 	}
+	// 将读取结果赋给 c
 	c := Configuration{}
 	if err := toml.Unmarshal(cb, &c); err != nil {
-		return errors.New(fmt.Sprintf("Error unmarshalling TOML configuration file %s: %s", *s.Options.ConfigFilePath,
-			err))
+		return errors.New(fmt.Sprintf("Error unmarshalling TOML configuration file %s: %s", *s.Options.ConfigFilePath, err))
 	}
 
 	s.Config = &c
@@ -257,19 +258,24 @@ func (s *Session) GetConfiguration() (err error) {
 
 	// Listening
 	if s.Config.Proxy.IP == "" {
+		// DefaultIP = "0:0:0:0"
 		s.Config.Proxy.IP = DefaultIP
 	}
 
 	// Network Listener
 	if s.Config.Proxy.Listener == "" {
+		// Default: tcp
 		s.Config.Proxy.Listener = DefaultListener
 	} else if !core.StringContains(strings.ToLower(s.Config.Proxy.Listener), []string{"tcp", "tcp4", "tcp6"}) {
+		// tcp|tcp4|tcp6 => tcp
 		s.Config.Proxy.Listener = DefaultListener
 	}
 
 	if s.Config.Proxy.Port == 0 {
+		// default: 80
 		s.Config.Proxy.Port = DefaultHTTPPort
 		if s.Config.TLS.Enabled {
+			// default: 443
 			s.Config.Proxy.Port = DefaultHTTPSPort
 		}
 	}
@@ -279,11 +285,12 @@ func (s *Session) GetConfiguration() (err error) {
 
 	if s.Config.TLS.Enabled {
 
-		// Load TLS Certificate
+		// 加载 TLS 证书
 		s.Config.TLS.CertificateContent = s.Config.TLS.Certificate
 
 		if !strings.HasPrefix(s.Config.TLS.Certificate, "-----BEGIN CERTIFICATE-----\n") {
 			er := errors.New(fmt.Sprintf("Error reading TLS cert %s: %s", s.Config.TLS.Certificate, err))
+			// 猜测 s.Config.TLS.Certificate 是文件路径
 			if _, err := os.Stat(s.Config.TLS.CertificateContent); err == nil {
 				crt, err := ioutil.ReadFile(s.Config.TLS.CertificateContent)
 				if err != nil {
@@ -295,7 +302,7 @@ func (s *Session) GetConfiguration() (err error) {
 			}
 		}
 
-		// Load TLS Root CA Certificate
+		// 加载 TLS 根 CA 证书
 		s.Config.TLS.RootContent = s.Config.TLS.Root
 		if !strings.HasPrefix(s.Config.TLS.Root, "-----BEGIN CERTIFICATE-----\n") {
 			er := errors.New(fmt.Sprintf("Error reading TLS cert pool %s: %s", s.Config.TLS.Root, err))
@@ -310,7 +317,7 @@ func (s *Session) GetConfiguration() (err error) {
 			}
 		}
 
-		// Load TLS Certificate Key
+		// 加载 TLS 证书密钥
 		s.Config.TLS.KeyContent = s.Config.TLS.Key
 		if !strings.HasPrefix(s.Config.TLS.Key, "-----BEGIN") {
 			er := errors.New(fmt.Sprintf("Error reading TLS cert key %s: %s", s.Config.TLS.Key, err))
@@ -329,18 +336,19 @@ func (s *Session) GetConfiguration() (err error) {
 
 		s.Config.TLS.MinVersion = strings.ToUpper(s.Config.TLS.MinVersion)
 		if !core.StringContains(s.Config.TLS.MinVersion, []string{"SSL3.0", "TLS1.0", "TLS1.1", "TLS1.2", "TLS1.3"}) {
-			// Fallback to TLS1
+			// SSL3.0|TLS1.0|TLS1.1|TLS1.2|TLS1.3 => TLS1
 			s.Config.TLS.MinVersion = "TLS1.0"
 		}
 
 		s.Config.TLS.RenegotiationSupport = strings.ToUpper(s.Config.TLS.RenegotiationSupport)
 		if !core.StringContains(s.Config.TLS.RenegotiationSupport, []string{"NEVER", "ONCE", "FREELY"}) {
-			// Fallback to NEVER
+			// NEVER|ONCE|FREELY => NEVER
 			s.Config.TLS.RenegotiationSupport = "NEVER"
 		}
 
 	}
 
+	// string 到 string 的 map
 	s.Config.Crawler.OriginsMapping = make(map[string]string)
 
 	s.Config.SkipExtensions = []string{
@@ -354,7 +362,7 @@ func (s *Session) GetConfiguration() (err error) {
 		"emf", "art", "xar", "png", "webp", "jxr", "hdp", "wdp", "cur", "ecw", "iff", "lbm", "liff", "nrrd", "pam",
 		"pcx", "pgf", "sgi", "rgb", "rgba", "bw", "int", "inta", "sid", "ras", "sun", "tga"}
 
-	// Fix Craft config
+	// 修复 Craft config
 	slice := s.Config.Craft.Add.Response.Headers
 	for s, header := range s.Config.Craft.Add.Response.Headers {
 		if header.Name == "" {
@@ -366,6 +374,8 @@ func (s *Session) GetConfiguration() (err error) {
 	slice = s.Config.Craft.Add.Request.Headers
 	for s, header := range s.Config.Craft.Add.Request.Headers {
 		if header.Name == "" {
+			// slice[s+1:]... 表示将 slice[s+1:] 展开为元素
+			// 将 header.Name 为空的 header 删除
 			slice = append(slice[:s], slice[s+1:]...)
 		}
 	}
@@ -380,11 +390,11 @@ func (s *Session) UpdateConfiguration(domains *[]string) (err error) {
 	//
 	// Update config
 	//
-	// Disable crawler and update external domains
+	// 禁用 crawler and 更新 external domains
 	config.Crawler.ExternalOrigins = *domains
 	config.Crawler.Enabled = false
 
-	// Update TLS accordingly
+	// 相应的更新 TLS
 	if !config.TLS.Expand {
 		config.TLS.Root = config.TLS.RootContent
 		config.TLS.Key = config.TLS.KeyContent

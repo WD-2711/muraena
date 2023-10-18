@@ -17,10 +17,8 @@ type Values map[string][]string
 // valid query parameters found; err describes the first decoding error
 // encountered, if any.
 //
-// Query is expected to be a list of key=value settings separated by ampersands.
-// A setting without an equals sign is interpreted as a key set to an empty
-// value.
-// Settings containing a non-URL-encoded semicolon are considered invalid.
+
+// ParseQuery 解析 URL 编码的 query 字符串并返回一个映射
 func ParseQuery(query string) (Values, error) {
 	m := make(Values)
 	err := parseQuery(m, query)
@@ -29,6 +27,7 @@ func ParseQuery(query string) (Values, error) {
 
 func parseQuery(m Values, query string) (err error) {
 	for query != "" {
+		// 例如 query 为 sss=1&ddd=2，那么分隔后就为 key="sss=1"，query="ddd=2"
 		key := query
 		if i := strings.IndexAny(key, "&"); i >= 0 {
 			key, query = key[:i], key[i+1:]
@@ -42,10 +41,12 @@ func parseQuery(m Values, query string) (err error) {
 		if key == "" {
 			continue
 		}
+		// key="sss"，value="1"
 		value := ""
 		if i := strings.Index(key, "="); i >= 0 {
 			key, value = key[:i], key[i+1:]
 		}
+		// "Hello%20World%21" -> "Hello World!"
 		key, err1 := url.QueryUnescape(key)
 		if err1 != nil {
 			if err == nil {
@@ -65,7 +66,7 @@ func parseQuery(m Values, query string) (err error) {
 	return err
 }
 
-// Encode encodes the values into ``URL encoded'' form
+// Encode encodes the values into “URL encoded” form
 // ("bar=baz&foo=quux") NOT sorted by key.
 func (v Values) Encode() string {
 	if v == nil {

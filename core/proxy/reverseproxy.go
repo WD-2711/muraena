@@ -4,10 +4,8 @@
 
 // HTTP reverse proxy handler
 
-//
 // NOTE:
 // This version has been modified for the Muraena needs, for instance removing the X-Forwarded-For header
-//
 package proxy
 
 import (
@@ -96,13 +94,9 @@ func singleJoiningSlash(a, b string) string {
 	return a + b
 }
 
-// NewSingleHostReverseProxy returns a new ReverseProxy that routes
-// URLs to the scheme, host, and base path provided in target. If the
-// target's path is "/base" and the incoming request was for "/dir",
-// the target request will be for /base/dir.
-// NewSingleHostReverseProxy does not rewrite the Host header.
-// To rewrite Host headers, use ReverseProxy directly with a custom
-// Director policy.
+// NewSingleHostReverseProxy 返回一个新的 ReverseProxy，它将 URL 路由到 target 中提供的方案、主机和基本路径
+// 如果目标路径是 /base 并且传入请求针对 /dir，则目标请求将针对 /base/dir
+// NewSingleHostReverseProxy 不会重写 Host 头
 func NewSingleHostReverseProxy(target *url.URL) *ReverseProxy {
 	targetQuery := target.RawQuery
 	director := func(req *http.Request) {

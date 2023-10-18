@@ -119,8 +119,7 @@ func packDeflate(i []byte) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-// ArmorDomain filters duplicate strings in place and returns a slice with
-// only unique strings.
+// ArmorDomain 过滤重复字符串并返回仅包含唯一字符串的切片
 func ArmorDomain(slice []string) []string {
 	keys := make(map[string]bool)
 	var list []string
@@ -133,10 +132,12 @@ func ArmorDomain(slice []string) []string {
 	return list
 }
 
+// s 是否有 "*." 为前缀
 func isWildcard(s string) bool {
 	return strings.HasPrefix(s, "*.")
 }
 
+// 检查 toCheck 是否以 domain 为结尾
 func IsSubdomain(domain string, toCheck string) bool {
 	if strings.HasSuffix(toCheck, domain) {
 		return true

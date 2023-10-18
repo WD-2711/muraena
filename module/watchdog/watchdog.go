@@ -41,7 +41,7 @@ type Watchdog struct {
 	Action ResponseAction
 }
 
-// Rule is a structure that represents the rules of a blacklist
+// Rule是表示 blacklist 规则的结构体
 type Rule struct {
 	Raw       string
 	All       bool
@@ -54,7 +54,7 @@ type Rule struct {
 	UserAgent string
 }
 
-// Blacklist is a list of Rules
+// Blacklist是规则列表
 type Blacklist struct {
 	List []*Rule
 }
@@ -153,7 +153,6 @@ func (module *Watchdog) Prompt() {
 
 }
 
-// Load configures the module by initializing its main structure and variables
 func Load(s *session.Session) (m *Watchdog, err error) {
 
 	m = &Watchdog{
@@ -167,22 +166,21 @@ func Load(s *session.Session) (m *Watchdog, err error) {
 	if m.Enabled {
 		config := s.Config.Watchdog
 
-		// Parse raw rules
+		// 解析原始规则到 m.Raw
 		if _, err := os.Stat(config.Rules); err == nil {
 			rules, err := ioutil.ReadFile(config.Rules)
 			if err != nil {
 				m.Raw = string(rules)
 			}
 		}
-
+		// 重新解析规则更新黑名单
 		m.Reload()
-
+		// 启动协程 m.MonitorRules()
 		if m.Dynamic {
 			go m.MonitorRules()
 		}
 
-		//	TODO: make this customizable
-		//	 Set default response action to 404 Nginx
+		//	将默认响应操作设置为 404 Nginx
 		m.Action = ResponseAction{Code: rNginx404}
 		return
 	}
@@ -191,7 +189,7 @@ func Load(s *session.Session) (m *Watchdog, err error) {
 	return
 }
 
-// Reload reparses the rules to update the Blacklist
+// Reload 重新解析规则更新黑名单
 func (module *Watchdog) Reload() {
 	module.loadRules()
 	module.loadGeoDB()
@@ -248,7 +246,7 @@ func (module *Watchdog) getRulesString() string {
 }
 
 func (module *Watchdog) loadRules() {
-
+	// 读取规则文件到 module.Raw
 	if module.RulesFilePath != "" {
 		module.Debug("Loading rules at %s", module.RulesFilePath)
 
@@ -263,7 +261,7 @@ func (module *Watchdog) loadRules() {
 		}
 	}
 
-	// Parse rules
+	// 解析规则
 	module.Rules = ParseRules(module.Raw)
 	module.Debug("%d parsed rules.", len(module.Rules.List))
 	return
@@ -276,6 +274,7 @@ func (module *Watchdog) loadGeoDB() {
 	}
 
 	var err error
+	// 用于解析和查询 GeoIP2 数据库，它提供了 IP 地址与地理位置信息的映射，包括国家、城市、经纬度、时区等
 	module.GeoDB, err = geoip2.Open(module.GeoDBFilePath)
 	if core.IsError(err) {
 		module.Warning("Could not open geolocation database: %s", err.Error())
@@ -317,13 +316,14 @@ func (b *Blacklist) Concatenate(items []*Rule) {
 	b.List = append(b.List, items...)
 }
 
-// ParseRules parses a raw blacklist (text) and returns a Blacklist struct.
-// 	Match All [*] (Useful for creating a whitelist)
-// 	Match IP [e.g. 203.0.113.6 or 2001:db8::68]
-// 	Match IP Network [e.g.: 192.0.2.0/24 or ::1/128]
-// 	Match Hostname [e.g. crawl-66-249-66-1.googlebot.com]
-// 	Match Hostname RegExp [e.g.: ~ .*\.cox\.net]
-// 	Match Geofence [e.g.: @ 39.377297 -74.451082 (7km)] or [ @ Country:IT ] or [ @ City:Rome ]
+// ParseRules 解析原始 Blacklist（文本）并返回 Blacklist 结构
+//
+//	全部匹配 [*] (用于创建 whitelist)
+//	匹配 IP [e.g. 203.0.113.6 or 2001:db8::68]
+//	匹配 IP Network [e.g.: 192.0.2.0/24 or ::1/128]
+//	匹配 Hostname [e.g. crawl-66-249-66-1.googlebot.com]
+//	匹配 Hostname RegExp [e.g.: ~ .*\.cox\.net]
+//	匹配 Geofence [e.g.: @ 39.377297 -74.451082 (7km)] or [ @ Country:IT ] or [ @ City:Rome ]
 func ParseRules(rules string) Blacklist {
 	lines := strings.Split(rules, "\n")
 	blacklist := Blacklist{List: []*Rule{}}
@@ -331,22 +331,20 @@ func ParseRules(rules string) Blacklist {
 	for _, line := range lines {
 		item := &Rule{Raw: line}
 
-		// Ignore blank lines or comments (beginning with #),
+		// 忽略空行或注释（以#开头）
 		line = strings.TrimSpace(line)
 		if line == "" || line[0] == '#' {
 			continue
 		}
 
-		// An optional prefix "!" which negates the pattern;
-		// any matching address/host excluded by a previous pattern
-		// will become included again.
+		// 可选前缀 "!" 这否定了后面的 pattern
+		// 先前模式排除的任何匹配地址/主机将再次包含在内
 		if line[0] == '!' {
 			item.Negation = true
 			line = strings.TrimSpace(line[1:])
 		}
 
-		// A line with only "*" matches everything,
-		// allowing the creation of a whitelist.
+		// 仅包含 "*" 的行匹配所有内容，允许创建白名单
 		if line == "*" {
 			item.All = true
 			blacklist.Add(item)
@@ -371,11 +369,10 @@ func ParseRules(rules string) Blacklist {
 
 		switch line[0] {
 		case '@':
-			// An optional prefix "@" indicates a geofencing target.
-			// Geofencing can be either with Location coordinates,
-			// or by defining values to match, such as Country
+			// 可选前缀 "@" 表示地理目标。地理目标可以使用位置坐标，也可以定义要匹配的值，例如国家/地区
 			line = strings.TrimSpace(line[1:])
-
+			// 提取 key:value 到 matches
+			// 匹配地理坐标的 Type、Field、Value
 			matches := regexp.MustCompile(`^(\w+):([\w\s]+)$`).FindStringSubmatch(line)
 			if len(matches) == 3 {
 				item.Geofence = &Geofence{
@@ -387,28 +384,26 @@ func ParseRules(rules string) Blacklist {
 				blacklist.Add(item)
 				continue
 			}
-
+			// 提取 Latitude、Longitude、Radius
 			matches = geofenceRegexp.FindStringSubmatch(line)
 			if len(matches) == 5 {
 				var lat, lng, radius float64 = 0, 0, 25
 				var err error
 
-				latString, lngString, radiusString, units :=
-					matches[1], matches[2], matches[3], strings.ToLower(matches[4])
+				latString, lngString, radiusString, units := matches[1], matches[2], matches[3], strings.ToLower(matches[4])
 
-				// Parse latitude
+				// 将 latString 转为 float 类型的 latitude
 				if lat, err = strconv.ParseFloat(latString, 64); core.IsError(err) {
 					// Bad latitude
 					continue
 				}
 
-				// Parse longitude
+				// 将 lngString 转为 float 类型的 lng
 				if lng, err = strconv.ParseFloat(lngString, 64); core.IsError(err) {
 					// Bad longitude
 					continue
 				}
 
-				// Parse optional radius
 				if radiusString != "" {
 					if radius, err = strconv.ParseFloat(radiusString, 64); core.IsError(err) {
 						// Bad radius
@@ -435,8 +430,9 @@ func ParseRules(rules string) Blacklist {
 
 			continue
 		case '~':
-			// An optional prefix "~" indicates a hostname regular expression match.
+			// 可选前缀 "~" 表示主机名正则表达式匹配
 			line = strings.TrimSpace(line[1:])
+			// 判断 line 是否是合格的正则表达式
 			_, err := regexp.Compile(line)
 			if core.IsError(err) {
 				blacklist.Add(item)
@@ -448,11 +444,11 @@ func ParseRules(rules string) Blacklist {
 			continue
 
 		case '>':
-			// An optional prefix ">" indicates a user-agent match.
+			// ">" 表示用户代理匹配
 			line = strings.TrimSpace(line[1:])
 			item.UserAgent = line
 
-			// If > is followed by ~, a regular expression will be applied: e.g. >~ .*curl.*
+			// 如果 > 后跟 ~，则将应用正则表达式，例如： >~ .*curl.*
 			if line[0] == '~' {
 				line = strings.TrimSpace(line[1:])
 				_, err := regexp.Compile(line)
@@ -470,7 +466,7 @@ func ParseRules(rules string) Blacklist {
 			continue
 		}
 
-		// If a CIDR notation is given, then parse that as an IP network.
+		// 如果给出了 CIDR 表示法，则将其解析为 IP 网络
 		_, network, err := net.ParseCIDR(line)
 		if err == nil {
 			item.Network = network
@@ -478,14 +474,14 @@ func ParseRules(rules string) Blacklist {
 			continue
 		}
 
-		// If an IP address is given, parse as unique IP.
+		// 如果给出了 IP 地址，则解析为唯一 IP
 		if ip := net.ParseIP(line); ip != nil {
 			item.IP = ip
 			blacklist.Add(item)
 			continue
 		}
 
-		// Otherwise, treat the pattern as a hostname.
+		// 否则，将该模式视为主机名
 		item.Hostname = strings.ToLower(line)
 		blacklist.Add(item)
 	}
@@ -493,8 +489,8 @@ func ParseRules(rules string) Blacklist {
 	return blacklist
 }
 
-// Allow decides whether the Blacklist permits the selected IP address.
-//func (module *Watchdog) Allow(ip net.IP) bool {
+// Allow 决定 Blacklist 是否允许选择的 IP 地址
+// func (module *Watchdog) Allow(ip net.IP) bool {
 func (module *Watchdog) Allow(r *http.Request) bool {
 
 	ip := GetRealAddr(r)
@@ -504,12 +500,12 @@ func (module *Watchdog) Allow(r *http.Request) bool {
 	allow := true
 	b := module.Rules
 	var geoCity *geoip2.City
-
+	// b.List <=> Blacklist
 	for _, item := range b.List {
 		match := false
 
 		if item.All {
-			// Wildcard
+			// 通配符
 			match = true
 
 		} else if item.Network != nil {
@@ -522,6 +518,7 @@ func (module *Watchdog) Allow(r *http.Request) bool {
 
 		} else if item.Hostname != "" {
 			// Hostname
+			// 查询 hostname 的 ip 列表
 			addrs, err := net.LookupIP(item.Hostname)
 			if err != nil {
 				for _, addr := range addrs {
@@ -531,7 +528,7 @@ func (module *Watchdog) Allow(r *http.Request) bool {
 					}
 				}
 			}
-
+			// 查询 ip 的 hostname
 			names, err := net.LookupAddr(ip.String())
 			if err != nil {
 				for _, name := range names {
@@ -544,22 +541,22 @@ func (module *Watchdog) Allow(r *http.Request) bool {
 			}
 
 		} else if item.Regexp != "" {
-			// Regular Expression
+			// 正则表达式
 			regex, err := regexp.Compile(item.Regexp)
 			if core.IsError(err) {
 				module.Warning("Error compiling regular expression %s.\n%s", item.Regexp, err)
 				continue
 			}
 
-			// Regex can apply to:
+			// 正则应用于：
 			// - UserAgent
-			// - IP/Network/Etc.
-
+			// - IP/Network/Etc
 			if item.UserAgent != "" {
 				if regex.Match([]byte(ua)) {
 					match = true
 				}
 			} else {
+				// 匹配 ip 对应的 hostname
 				names, err := net.LookupAddr(ip.String())
 				if !core.IsError(err) {
 					for _, name := range names {
@@ -583,6 +580,7 @@ func (module *Watchdog) Allow(r *http.Request) bool {
 			}
 
 			if geoCity == nil {
+				// 查看 ip 对应的城市
 				geoCity, err = module.GeoDB.City(ip)
 				if core.IsError(err) {
 					geoCity = nil
@@ -590,18 +588,18 @@ func (module *Watchdog) Allow(r *http.Request) bool {
 				}
 			}
 
-			// Geofence by Parameter
+			// 匹配国家或城市
 			if item.Geofence.Type == Parameter {
 				if item.Geofence.Field == "country" && strings.ToLower(geoCity.Country.IsoCode) == item.Geofence.Value {
 					match = true
-				} else if item.Geofence.Field == "city" && strings.ToLower(geoCity.City.Names["en"]) == item.Geofence.
-					Value {
+				} else if item.Geofence.Field == "city" && strings.ToLower(geoCity.City.Names["en"]) == item.Geofence.Value {
 					match = true
 				}
 			}
 
-			// Geofence by Location
+			// 匹配地理位置
 			if item.Geofence.Type == Location {
+				// geoCity 的经纬度
 				user := &Geofence{
 					Latitude:  geoCity.Location.Latitude,
 					Longitude: geoCity.Location.Longitude,
@@ -609,20 +607,21 @@ func (module *Watchdog) Allow(r *http.Request) bool {
 				}
 
 				bounds := item.Geofence
+				// bounds 与 user 地理坐标之间的关系
 				boundsIntersect := bounds.Intersection(user)
 
 				if item.Negation {
-					// Whitelist if user is completely contained within bounds
+					// 如果用户完全包含在范围内，则将其列入白名单
 					match = boundsIntersect&IsSuperset != 0
 				} else {
-					// Blacklist if user intersects at all with bounds
+					// 如果用户与边界完全相交，则将其列入黑名单
 					match = !(boundsIntersect&IsDisjoint != 0)
 				}
 			}
 
 		}
 
-		// TODO: Allow early termination based on negation flags
+		// TODO: 允许提前终止
 		if match {
 			allow = item.Negation
 		}
@@ -636,24 +635,26 @@ func (module *Watchdog) Allow(r *http.Request) bool {
 	return allow
 }
 
-// MonitorRules starts a watcher to monitor changes to file containing blacklist rules.
+// MonitorRules 启动观察程序来监视包含黑名单规则的文件的更改
 func (module *Watchdog) MonitorRules() {
 
 	filepath := module.RulesFilePath
 
-	// starting watcher
+	// 开启观察程序
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		module.Error(err.Error())
 	}
 	defer watcher.Close()
 
-	// monitor events
+	// 监控事件
 	go func() {
+		// 无限循环
 		for {
 			select {
 			case event := <-watcher.Events:
 				switch event.Op {
+				// 检测文件或目录的写，如果有 "写" 操作则 loadRules
 				case fsnotify.Write:
 					module.loadRules()
 				}
@@ -663,14 +664,13 @@ func (module *Watchdog) MonitorRules() {
 		}
 	}()
 
-	// add file to the watcher first time
+	// 将 module.RulesFilePath 给 watcher
 	module.Debug("Monitoring %s file changes\n", filepath)
 	if err = watcher.Add(filepath); err != nil {
 		module.Error(err.Error())
 	}
 
-	// to keep waiting forever, to prevent main exit
-	// this is to replace the done channel
+	// 永远阻塞
 	select {}
 }
 

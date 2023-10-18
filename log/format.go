@@ -37,14 +37,14 @@ var (
 		DateTimeFormat: dateTimeFormat,
 		Format:         format,
 	}
-	// dateFormat is the default date format being used when filling the {date} log token.
+	// dateFormat 是填充 {date} 日志标记时使用的默认日期格式
 	dateFormat = "06-Jan-02"
-	// timeFormat is the default time format being used when filling the {time} or {datetime} log tokens.
+	// timeFormat 是填充 {time} 或 {datetime} 日志标记时使用的默认时间格式
 	timeFormat = "15:04:05"
 
 	// RFC822
-	// DateTimeFormat is the default date and time format being used when filling the {datetime} log token.
+	// DateTimeFormat 是填充 {datetime} 日志令牌时使用的默认日期和时间格式
 	dateTimeFormat = "02 Jan 06 15:04 MST"
-	// Format is the default format being used when logging.
+	// 格式是 log 时使用的默认格式
 	format = "{datetime} {level:color}{level:name}{reset} {message}"
 )

@@ -44,6 +44,7 @@ func Init(opt core.Options, isLogToFile bool, logFilePath string) {
 		}
 	}
 
+	// 设置 log 输出级别为 debug
 	logLevel := ll.INFO
 	if *opt.Debug {
 		logLevel = ll.DEBUG
@@ -51,13 +52,13 @@ func Init(opt core.Options, isLogToFile bool, logFilePath string) {
 
 	config := FormatConfigBasic
 	config.Format = "{datetime} {level:color}{level:name}{reset} {message}"
-	// Console Log
+	// 控制台 Log
 	err := AddOutput("", logLevel, config, noEffects)
 	if err != nil {
 		panic(err)
 	}
 
-	// File Log
+	// 文件 Log
 	if isLogToFile && logFilePath != "" {
 		err = AddOutput(logFilePath, logLevel, config, true)
 		if err != nil {
@@ -83,7 +84,7 @@ func AddOutput(path string, level ll.Verbosity, config FormatConfig, noEffects b
 }
 
 func (l *logger) emit(s string) {
-	// remove all effects if found
+	// 删除所有 effects （如果找到）
 	if l.NoEffects {
 		for _, re := range reEffects {
 			s = re.ReplaceAllString(s, "")
@@ -91,6 +92,7 @@ func (l *logger) emit(s string) {
 	}
 
 	s = strings.Replace(s, "%", "%%", -1)
+	// 打印 log 到 l.Writer
 	if _, err := fmt.Fprintf(l.Writer, s+string("\n")); err != nil {
 		fmt.Printf("Emit error: %+v", err)
 	}
@@ -141,7 +143,7 @@ func do(v ll.Verbosity, format string, args ...interface{}) {
 		}
 
 		logLine := l.FormatConfig.Format
-
+		// 在 logLine 中填充信息
 		// process token -> callback
 		for token, cb := range tokens {
 			logLine = strings.Replace(logLine, token, cb(), -1)
@@ -150,7 +152,7 @@ func do(v ll.Verbosity, format string, args ...interface{}) {
 		for token, effect := range Effects {
 			logLine = strings.Replace(logLine, token, effect, -1)
 		}
-		// make sure an user error does not screw the log
+		// 确保用户错误不会破坏日志
 		if tui.HasEffect(logLine) && !strings.HasSuffix(logLine, tui.RESET) {
 			logLine += tui.RESET
 		}
@@ -171,7 +173,7 @@ func Raw(format string, args ...interface{}) {
 	}
 }
 
-// Debug emits a debug message.
+// Debug 消息
 func Debug(format string, args ...interface{}) {
 	do(ll.DEBUG, format, args...)
 }

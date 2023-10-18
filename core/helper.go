@@ -19,7 +19,7 @@ func IsError(err error) bool {
 	return ei.IsError()
 }
 
-// StringContains checks if a string is contained in a slice of strings
+// StringContains 查看 v 是否在 a 的字符串数组中
 func StringContains(v string, a []string) bool {
 	for _, i := range a {
 		if i == v {

@@ -64,20 +64,20 @@ func (module *Watchdog) PromptResponseAction() {
 	}
 }
 
-// BlockRequest takes action and send the visitor to a chosen destination, i.e. blocks or trolls him
+// BlockRequest 采取行动并将访问者发送到选定的目的地，即阻止或恶搞他
 func (module *Watchdog) CustomResponse(response http.ResponseWriter, request *http.Request) {
 
 	switch module.Action.Code {
-
+	// 返回404
 	case rNginx404:
 		module.NginxNotFound(response, request)
-
+	// 返回重定向到目标地址
 	case rCustom301:
 		module.CustomMovedPermanently(response, request, module.Action.TargetURL)
 	}
 }
 
-// NginxNotFound replies with a 404 page similar to nginx server
+// NginxNotFound 回复类似 nginx 服务器的 404 页面
 func (module *Watchdog) NginxNotFound(w http.ResponseWriter, r *http.Request) {
 
 	var body = `<html>
@@ -93,7 +93,7 @@ func (module *Watchdog) NginxNotFound(w http.ResponseWriter, r *http.Request) {
 <!-- a padding to disable MSIE and Chrome friendly error page -->
 <!-- a padding to disable MSIE and Chrome friendly error page -->
 <!-- a padding to disable MSIE and Chrome friendly error page -->`
-
+	// 设置 headers
 	headers := w.Header()
 	headers.Set("Server", "nginx/1.15.5 (Ubuntu)")
 	headers.Set("Content-Type", "text/html")
@@ -104,6 +104,7 @@ func (module *Watchdog) NginxNotFound(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var gzr gzipResponseWriter
+	// 查看原始请求中是否支持 gzip
 	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 		w.Header().Set("Content-Encoding", "gzip")
 		gz := gzip.NewWriter(w)
@@ -134,7 +135,7 @@ func (module *Watchdog) NginxNotFound(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// CustomMovedPermanently redirects to targetURL page with 301 response header
+// CustomMovedPermanently 重定向到带有 301 响应标头的 targetURL 页面
 func (module *Watchdog) CustomMovedPermanently(w http.ResponseWriter, r *http.Request, targetURL string) {
 	http.Redirect(w, r, targetURL, http.StatusMovedPermanently)
 }

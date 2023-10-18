@@ -48,7 +48,7 @@ type Tracker struct {
 	ValidatorRegex *regexp.Regexp
 }
 
-// Trace object structure
+// Trace 对象结构
 type Trace struct {
 	*Tracker
 	ID string
@@ -109,14 +109,13 @@ func (module *Tracker) IsEnabled() bool {
 	return module.Enabled
 }
 
-// Load configures the module by initializing its main structure and variables
 func Load(s *session.Session) (m *Tracker, err error) {
 
 	m = &Tracker{
 		SessionModule: session.NewSessionModule(Name, s),
 		Enabled:       s.Config.Tracking.Enabled,
-		Header:        "If-Range",            // Default HTTP Header
-		Landing:       "If-Landing-Redirect", // Default Landing HTTP Header
+		Header:        "If-Range",            // 默认 HTTP Header
+		Landing:       "If-Landing-Redirect", // 默认登录 HTTP Header
 		Type:          strings.ToLower(s.Config.Tracking.Type),
 	}
 
@@ -128,17 +127,17 @@ func Load(s *session.Session) (m *Tracker, err error) {
 	config := s.Config.Tracking
 	m.Identifier = config.Identifier
 
-	// Set tracking header
+	// 设置 tracking header
 	if s.Config.Tracking.Header != "" {
 		m.Header = s.Config.Tracking.Header
 	}
 
-	// Set landing header
+	// 设置登录 header
 	if s.Config.Tracking.Landing != "" {
 		m.Landing = s.Config.Tracking.Landing
 	}
 
-	// Default Trace format is UUIDv4
+	// 默认追踪格式为 UUIDv4
 	m.ValidatorRegex = regexp.MustCompile("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3" +
 		"}-[a-fA-F0-9]{12}$")
 
@@ -154,11 +153,12 @@ func Load(s *session.Session) (m *Tracker, err error) {
 	return
 }
 
-// IsValid validates the tracking value
+// IsValid 验证 tracking 的值
 func (t *Trace) IsValid() bool {
 	return t.ValidatorRegex.MatchString(t.ID)
 }
 
+// 是否是禁用的方法
 func isDisabledMethod(method string) bool {
 
 	method = strings.ToUpper(method)
@@ -178,8 +178,8 @@ func isDisabledAccessMediaType(accessMedia string) bool {
 
 	var disabledMedia = []string{"image/"}
 
-	// Media Type handling.
-	// Prevent processing of unwanted accessMedia types
+	// 媒体类型 handling
+	// 阻止处理不需要的访问媒体类型
 	accessMedia = strings.TrimSpace(strings.ToLower(accessMedia))
 	for _, skip := range disabledMedia {
 
@@ -192,6 +192,7 @@ func isDisabledAccessMediaType(accessMedia string) bool {
 	return false
 }
 
+// 是否是禁用的路径
 func isDisabledPath(requestPath string) bool {
 
 	file := path.Base(requestPath)
@@ -208,6 +209,7 @@ func isDisabledPath(requestPath string) bool {
 	return false
 }
 
+// 生成 trace 数据结构
 func (module *Tracker) makeTrace(id string) (t *Trace) {
 	t = &Trace{}
 	t.Tracker = module
@@ -225,55 +227,49 @@ func (module *Tracker) makeID() string {
 	return str.Generate(1)
 }
 
-// TrackRequest tracks an HTTP Request
+// TrackRequest 跟踪 HTTP Request
 func (module *Tracker) TrackRequest(request *http.Request) (t *Trace) {
-
+	// 定义 *Trace
 	t = module.makeTrace("")
 
-	// Do Not Track if not required
 	if !module.Enabled {
 		return
 	}
 
-	//
-	// Requests to skip
-	//
+	// 某些 Requests 需要忽略
 	if isDisabledMethod(request.Method) {
-		module.Debug("Skipping request method [%s] because untrackable ... for now ",
-			tui.Bold(tui.Red(request.Method)))
+		module.Debug("Skipping request method [%s] because untrackable ... for now ", tui.Bold(tui.Red(request.Method)))
 		return
 	}
 
 	if isDisabledPath(request.URL.Path) {
-		module.Debug("Skipping requested path [%s] because untrackable ... for now ",
-			tui.Bold(tui.Red(request.URL.Path)))
+		module.Debug("Skipping requested path [%s] because untrackable ... for now ", tui.Bold(tui.Red(request.URL.Path)))
 		return
 	}
-
+	// 不处理 request 头中有 "Access" 的请求
 	if isDisabledAccessMediaType(request.Header.Get("Access")) {
-		module.Debug("Skipping requested Access header [%s] because untrackable ... for now ",
-			tui.Bold(tui.Red(request.Header.Get("Access"))))
+		module.Debug("Skipping requested Access header [%s] because untrackable ... for now ", tui.Bold(tui.Red(request.Header.Get("Access"))))
 		return
 	}
 
 	noTraces := true
 	isTrackedPath := false
 
-	//
-	// Tracing types: Path || Query (default)
-	//
+	// 跟踪类型：Path || Query (default)
 	if module.Type == "path" {
 		tr := module.Session.Config.Tracking
 
 		pathRegex := strings.Replace(tr.Identifier, "_", "/", -1) + tr.Regex
 		re := regexp.MustCompile(pathRegex)
-
+		// url 匹配 tracking 正则
 		match := re.FindStringSubmatch(request.URL.Path)
 		module.Info("tracking path match: %v", match)
 
 		if len(match) > 0 {
 			t = module.makeTrace(match[0])
+			// 验证 t.ID 是否符合正则
 			if t.IsValid() {
+				// 将 module.Landing 设置为 URL.Path
 				request.Header.Set(module.Landing, strings.ReplaceAll(request.URL.Path, t.ID, ""))
 				module.Info("setting %s header to %s", module.Landing, strings.ReplaceAll(request.URL.Path, t.ID, ""))
 				noTraces = false
@@ -281,10 +277,10 @@ func (module *Tracker) TrackRequest(request *http.Request) (t *Trace) {
 			}
 		}
 	}
-
+	// 无需 Traces
 	if noTraces {
 		// Fallback
-		// Use Query String
+		// 使用 Query 字符串
 		t = module.makeTrace(request.URL.Query().Get(module.Identifier))
 		if t.IsValid() {
 			noTraces = false
@@ -294,7 +290,7 @@ func (module *Tracker) TrackRequest(request *http.Request) (t *Trace) {
 			if err == nil {
 				t.ID = c.Value
 
-				// Validate cookie content
+				// 验证 cookie 内容
 				if t.IsValid() {
 					noTraces = false
 				} else {

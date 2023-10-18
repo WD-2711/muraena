@@ -59,7 +59,6 @@ func (module *Telegram) Prompt() {
 	}
 }
 
-// Load configures the module by initializing its main structure and variables
 func Load(s *session.Session) (m *Telegram, err error) {
 
 	m = &Telegram{

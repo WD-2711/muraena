@@ -18,7 +18,7 @@ const (
 )
 
 func Prompt(s *Session) {
-
+	// 无限循环
 	for {
 		templates := &promptui.PromptTemplates{
 			Prompt:  "{{ . | }} ",
@@ -27,6 +27,7 @@ func Prompt(s *Session) {
 			Success: "{{ . | bold }} ",
 		}
 
+		// 检查输入的字符串是否在 session 的 module 列表中
 		validate := func(input string) error {
 			input = strings.ToLower(input)
 
@@ -48,6 +49,7 @@ func Prompt(s *Session) {
 		}
 
 		result, err := prompt.Run()
+		// ^C 退出
 		if err == promptui.ErrInterrupt {
 			exit()
 		} else if err != nil {
@@ -57,19 +59,18 @@ func Prompt(s *Session) {
 
 		result = strings.ToLower(result)
 
-		// Module menu
+		// Module 菜单
 		if core.StringContains(result, s.GetModuleNames()) {
-			// Retrieve module's object
+			// 从菜单中取回 module 对象
 			m, err := s.Module(result)
 			if err != nil {
 				log.Error("%s", err)
 				return
 			}
-
+			// ???
 			m.Prompt()
 
 		} else {
-
 			switch result {
 			case "h", "help":
 				s.help()

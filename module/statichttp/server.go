@@ -57,7 +57,6 @@ func (module *StaticHTTP) Prompt() {
 	module.Raw("No options are available for this module")
 }
 
-// Load configures the module by initializing its main structure and variables
 func Load(s *session.Session) (m *StaticHTTP, err error) {
 
 	m = &StaticHTTP{
@@ -77,7 +76,7 @@ func Load(s *session.Session) (m *StaticHTTP, err error) {
 	m.LocalPath = config.LocalPath
 	m.URLPath = config.URLPath
 
-	// Enable static server module
+	// 启用 static server 模块
 	if err = m.Start(); err != nil {
 		m.Debug("Dying")
 		return
@@ -90,29 +89,31 @@ func Load(s *session.Session) (m *StaticHTTP, err error) {
 func (module *StaticHTTP) configure() error {
 
 	module.address = fmt.Sprintf("127.0.0.1:%d", module.listeningPort)
+	// ServeMux 可以用来注册和分发 HTTP 请求到相应的处理程序（handlers）。它充当了一个路由器的角色，根据 URL 路径将请求导向不同的处理程序
 	module.mux = http.NewServeMux()
 
 	path := http.Dir(module.LocalPath)
 	module.Debug("[Static Server] Requested resource: %s", path)
 	fileServer := http.FileServer(FileSystem{path})
+	// 若访问 module.URLPath，则重定向到 module.LocalPath
 	module.mux.Handle(module.URLPath, http.StripPrefix(strings.TrimRight(module.URLPath, "/"), fileServer))
 
 	return nil
 }
 
-// Start runs the Static HTTP server module
+// Start 运行静态 HTTP 服务器模块
 func (module *StaticHTTP) Start() (err error) {
 
 	if err := module.configure(); err != nil {
 		return err
 	}
-
+	// 开启协程，监听访问
 	go http.ListenAndServe(module.address, module.mux)
 
 	return nil
 }
 
-// FileSystem custom file system handler
+// FileSystem 自定义文件系统处理程序
 type FileSystem struct {
 	fs http.FileSystem
 }

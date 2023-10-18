@@ -25,6 +25,7 @@ func AsTag(name string) string {
 	return fmt.Sprintf("%s ", tui.Wrap(tui.BACKLIGHTBLUE, tui.Wrap(tui.FOREBLACK, name)))
 }
 
+// 定义新模块
 func NewSessionModule(name string, s *Session) SessionModule {
 	m := SessionModule{
 		Name:    name,
@@ -35,6 +36,8 @@ func NewSessionModule(name string, s *Session) SessionModule {
 	return m
 }
 
+// args ...interface{} 代表可接收任意数量的 interface{} 类型的值。
+// interface{} 可以表示任意类型
 func (m *SessionModule) Debug(format string, args ...interface{}) {
 	log.Debug(m.tag+format, args...)
 }

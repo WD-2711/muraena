@@ -10,10 +10,15 @@ import (
 	"sync"
 	"time"
 
+	// 代码美化工具
 	"github.com/ditashi/jsbeautifier-go/jsbeautifier"
 	"github.com/evilsocket/islazy/tui"
+
+	// 抓取框架
 	"github.com/gocolly/colly/v2"
 	"github.com/icza/abcsort"
+
+	// 简单 HTTP 客户端库
 	"gopkg.in/resty.v1"
 	"mvdan.cc/xurls/v2"
 
@@ -69,7 +74,8 @@ func (module *Crawler) Prompt() {
 	module.Raw("No options are available for this module")
 }
 
-// Load configures the module by initializing its main structure and variables
+// Load 通过初始化模块的主要结构和变量来配置模块
+// 返回值为 (m *Crawler, err error)
 func Load(s *session.Session) (m *Crawler, err error) {
 
 	config := s.Config.Crawler
@@ -79,17 +85,18 @@ func Load(s *session.Session) (m *Crawler, err error) {
 		UpTo:          config.UpTo,
 		Depth:         config.Depth,
 	}
-
+	// xurls 是一个用于提取 URL 的正则表达式工具库
 	rgxURLS = xurls.Strict()
 
-	// Armor domains
+	// ExternalOrigins 去重
 	config.ExternalOrigins = proxy.ArmorDomain(config.ExternalOrigins)
 	if !m.Enabled {
 		m.Debug("is disabled")
 		return
 	}
-
+	// 进行爬取
 	m.explore()
+	// 简化 domain
 	m.SimplifyDomains()
 	config.ExternalOrigins = m.Domains
 
@@ -100,18 +107,20 @@ func Load(s *session.Session) (m *Crawler, err error) {
 }
 
 func (module *Crawler) explore() {
+	// 等待 waitGroup == 0
 	waitGroup.Wait()
 
 	// Custom client
+	// 创建一个自定义的 HTTP 客户端 collyClient，可以使用该客户端来发送 HTTP 请求
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	collyClient := &http.Client{Transport: tr}
 
+	// 定义 colly 抓取框架实例化后的对象 c
 	c := colly.NewCollector(
 		colly.UserAgent("Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36"),
-		// MaxDepth is by default 1, so only the links on the scraped page are visited,
-		// and no further links are followed
+		// MaxDepth 默认为 1，因此仅访问已抓取页面上的链接，不会再访问其他链接
 		colly.MaxDepth(module.Depth),
 		colly.CheckHead(),
 	)
@@ -119,31 +128,34 @@ func (module *Crawler) explore() {
 	c.SetClient(collyClient)
 
 	numVisited := 0
+	// 当 Collector 发出请求时自动执行此函数
 	c.OnRequest(func(r *colly.Request) {
 		numVisited++
+		// 当请求次数大于 module.UpTo 时取消 http 请求
 		if numVisited > module.UpTo {
 			r.Abort()
 			return
 		}
 	})
-
+	// 对 <script> 标签的 src 属性进行处理
 	c.OnHTML("script[src]", func(e *colly.HTMLElement) {
+		// res 是 <script> 标签的 src 属性
 		res := e.Attr("src")
 		if module.appendExternalDomain(res) {
-			// if it is a script from an external domain, make sure to fetch it
-			// beautify it and see it we need to replace things
+			// 如果它是来自 external domain 的脚本，请确保获取它
+			// 访问 js 中的 url，并从返回值中继续获取 url，添加到 external domain 中
 			waitGroup.Add(1)
 			go module.fetchJS(&waitGroup, res)
 		}
 
 	})
 
-	// all other tags with src attribute (img/video/iframe/etc..)
+	// 其他有 src 属性的 tags (img/video/iframe/etc..)
 	c.OnHTML("[src]", func(e *colly.HTMLElement) {
 		res := e.Attr("src")
 		module.appendExternalDomain(res)
 	})
-
+	// 用于引入外部资源，例如 CSS 文件
 	c.OnHTML("link[href]", func(e *colly.HTMLElement) {
 		res := e.Attr("href")
 		module.appendExternalDomain(res)
@@ -154,12 +166,12 @@ func (module *Crawler) explore() {
 		module.appendExternalDomain(res)
 	})
 
-	// Callback for links on scraped pages
+	// 超链接元素
 	c.OnHTML("a[href]", func(e *colly.HTMLElement) {
 		res := e.Attr("href")
 		module.appendExternalDomain(res)
 	})
-
+	// 定义爬虫规则，表示对所有域名都应用"每次爬取页面间会随机延迟0-500ms"的规则
 	if err := c.Limit(&colly.LimitRule{DomainGlob: "*", RandomDelay: 500 * time.Millisecond}); err != nil {
 		module.Warning("[Colly Limit]%s", err)
 	}
@@ -171,10 +183,10 @@ func (module *Crawler) explore() {
 	var config *session.Configuration
 	config = module.Session.Config
 
-	module.Info("Starting exploration of %s (crawlDepth:%d crawlMaxReq: %d), just a few seconds...",
-		config.Proxy.Target, module.Depth, module.UpTo)
+	module.Info("Starting exploration of %s (crawlDepth:%d crawlMaxReq: %d), just a few seconds...", config.Proxy.Target, module.Depth, module.UpTo)
 
 	dest := fmt.Sprintf("%s%s", config.Protocol, config.Proxy.Target)
+	// 爬取 dest ？？？
 	err := c.Visit(dest)
 	if err != nil {
 		module.Info("Exploration error visiting %s: %s", dest, tui.Red(err.Error()))
@@ -183,6 +195,7 @@ func (module *Crawler) explore() {
 
 func (module *Crawler) fetchJS(waitGroup *sync.WaitGroup, res string) {
 
+	// 此函数返回前调用 waitGroup.Done()
 	defer waitGroup.Done()
 
 	u, _ := url.Parse(res)
@@ -194,6 +207,7 @@ func (module *Crawler) fetchJS(waitGroup *sync.WaitGroup, res string) {
 	if !Contains(&discoveredJsUrls, nu) {
 		discoveredJsUrls = append(discoveredJsUrls, nu)
 		module.Debug("New JS: %s", nu)
+		// get 方式请求 res
 		resp, err := resty.R().Get(res)
 		if err != nil {
 			module.Error("Error fetching JS at %s: %s", res, err)
@@ -202,14 +216,15 @@ func (module *Crawler) fetchJS(waitGroup *sync.WaitGroup, res string) {
 
 		body := string(resp.Body())
 		opts := jsbeautifier.DefaultOptions()
+		// 美化返回的 body
 		beautyBody, err := jsbeautifier.Beautify(&body, opts)
 		if err != nil {
 			module.Error("Error beautifying JS at %s", res)
 			return
 		}
-
+		// 在 beautyBody 中找到所有的 url
 		jsUrls := rgxURLS.FindAllString(beautyBody, -1)
-		if len(jsUrls) > 0 && len(jsUrls) < 100 { // prevent cases where we have a lots of domains
+		if len(jsUrls) > 0 && len(jsUrls) < 100 {
 			for _, jsURL := range jsUrls {
 				module.appendExternalDomain(jsURL)
 			}
@@ -218,6 +233,7 @@ func (module *Crawler) fetchJS(waitGroup *sync.WaitGroup, res string) {
 	}
 }
 
+// 判断是否来自 Externa lDomain
 func (module *Crawler) appendExternalDomain(res string) bool {
 	if strings.HasPrefix(res, "//") || strings.HasPrefix(res, "https://") || strings.HasPrefix(res, "http://") {
 		u, err := url.Parse(res)
@@ -225,8 +241,11 @@ func (module *Crawler) appendExternalDomain(res string) bool {
 			module.Error("url.Parse error, skipping external domain %s: %s", res, err)
 			return false
 		}
-		// update the Domains after doing some minimal checks that might happen from xurls when
-		// parsing urls from JS files
+		// http://example.com/path/to/resource
+		// u.Scheme: http
+		// u.Host: example.com
+		// u.Path: /path/to/resource
+		// 在从 JS 文件解析 url 时，进行一些检查后更新域
 		if len(u.Host) > 2 && (strings.Contains(u.Host, ".") || strings.Contains(u.Host, ":")) {
 			module.Domains = append(module.Domains, u.Host)
 		}
@@ -237,6 +256,7 @@ func (module *Crawler) appendExternalDomain(res string) bool {
 	return false
 }
 
+// 将 []string 切片倒序
 func reverseString(ss []string) []string {
 	last := len(ss) - 1
 	for i := 0; i < len(ss)/2; i++ {
@@ -246,7 +266,7 @@ func reverseString(ss []string) []string {
 	return ss
 }
 
-// SimplifyDomains simplifies the Domains slice by grouping subdomains of 3rd and 4th level as *.<domain>
+// SimplifyDomains 通过将第 3 级和第 4 级子域分组为 *.<domain> 来简化域切片
 func (module *Crawler) SimplifyDomains() {
 
 	var domains []string

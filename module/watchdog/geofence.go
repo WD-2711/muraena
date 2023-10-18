@@ -3,7 +3,7 @@ package watchdog
 import (
 	"regexp"
 
-	"github.com/kellydunn/golang-geo"
+	geo "github.com/kellydunn/golang-geo"
 )
 
 var geofenceRegexp = regexp.MustCompile(`^([-+]?[0-9]*\.?[0-9]+)[^-+0-9]+([-+]?[0-9]*\.?[0-9]+)(?:[^0-9]+([0-9]*\.?[0-9]+)([A-Za-z]*)[^0-9]*)?$`)
@@ -15,7 +15,7 @@ var geofenceUnits = map[string]float64{
 	"ft": 1609.0 / 5280.0,
 }
 
-// Geofence represents a point on the Earth with an accuracy radius in meters.
+// Geofence 代表地球上的一个点，其精确半径以米为单位
 type Geofence struct {
 	Type                        GeofenceType
 	Field                       string
@@ -30,24 +30,25 @@ const (
 	Parameter              = "Parameter"
 )
 
-// SetIntersection is a description of the relationship between two sets.
+// SetIntersection 是对两个集合之间关系的描述
 type SetIntersection uint
 
 const (
-	// IsDisjoint means that the two sets have no common elements.
+	// IsDisjoint 表示两个集合没有共同元素
 	IsDisjoint SetIntersection = 1 << iota
 
-	// IsSubset means the first set is a subset of the second.
+	// IsSubset 表示第一个集合是第二个集合的子集
 	IsSubset
 
-	// IsSuperset means the second set is a subset of the first.
+	// IsSuperset 表示第一个集合是第二个集合的超集
 	IsSuperset
 )
 
-// Intersection describes the relationship between two geofences
+// Intersection 代表两个地理点之间的关系
 func (mi *Geofence) Intersection(tu *Geofence) (i SetIntersection) {
 	miPoint := geo.NewPoint(mi.Latitude, mi.Longitude)
 	tuPoint := geo.NewPoint(tu.Latitude, tu.Longitude)
+	// miPoint 与 tuPoint 的地球间距离
 	distance := miPoint.GreatCircleDistance(tuPoint) * 1000
 
 	radiusSum := mi.Radius + tu.Radius

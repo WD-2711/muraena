@@ -9,7 +9,7 @@ import (
 	"github.com/muraenateam/muraena/session"
 )
 
-// Victim: a browser that interacts with Muraena
+// Victim: 与 Muraena 交互的浏览器
 // KEY scheme:
 // victim:<ID>
 type Victim struct {
@@ -140,30 +140,31 @@ func (vc *VictimCookie) Store(victimID string) error {
 	return nil
 }
 
-// GetVictim returns a Victim from database
+// GetVictim 从数据库中返回 Victim
 func GetVictim(victimID string) (*Victim, error) {
 	rc := session.RedisPool.Get()
 	defer rc.Close()
 
 	var v Victim
 	vid := fmt.Sprintf("victim:%s", victimID)
+	// 获得 vid 对应的 value
 	value, err := redis.Values(rc.Do("HGETALL", vid))
 	if err != nil {
 		return nil, err
 	}
-
+	// 将 value 解析为结构体
 	err = redis.ScanStruct(value, &v)
 	if err != nil {
 		return nil, err
 	}
 
-	// Populate Credentials
+	// 填充 Credentials
 	err = v.GetCredentials()
 	if err != nil {
 		return nil, err
 	}
 
-	// Populate Cookies
+	// 填充 Cookies
 	err = v.GetVictimCookiejar()
 	if err != nil {
 		return nil, err
@@ -172,7 +173,7 @@ func GetVictim(victimID string) (*Victim, error) {
 	return &v, nil
 }
 
-// GetCredentials returns a VictimCredential from database
+// GetCredentials 从数据库中返回 VictimCredential
 func (v *Victim) GetCredentials() error {
 	rc := session.RedisPool.Get()
 	defer rc.Close()
@@ -203,7 +204,7 @@ func (v *Victim) GetCredentials() error {
 	return nil
 }
 
-// GetVictimCookiejar returns a slice of VictimCookie associated to a victim
+// GetVictimCookiejar 返回 victim 的 VictimCookie
 func (v *Victim) GetVictimCookiejar() error {
 	rc := session.RedisPool.Get()
 	defer rc.Close()
@@ -235,16 +236,17 @@ func (v *Victim) GetVictimCookiejar() error {
 	return nil
 }
 
-// GetAllVictims returns all the victim IDs stored in the database
+// GetAllVictims 返回数据库中存储的所有 victim 信息
 func GetAllVictims() ([]Victim, error) {
 	rc := session.RedisPool.Get()
 	defer rc.Close()
-
+	// 获取 victims 的 ID 列表
 	values, err := redis.Strings(rc.Do("LRANGE", "victims", "0", "-1"))
 	if err != nil {
 		return nil, err
 	}
 
+	// 获取每个 victims 的信息
 	var victims []Victim
 	for _, vID := range values {
 		v, err := GetVictim(vID)

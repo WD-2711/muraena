@@ -17,6 +17,7 @@ var ErrInterrupt = errors.New("^C")
 
 func ParseOptions() (Options, error) {
 	o := Options{
+		// 定义 -config、-debug、-proxy、-version、-no-colors 命令行选项
 		ConfigFilePath: flag.String("config", "", "JSON configuration file path"),
 		Debug:          flag.Bool("debug", false, "Print debug messages."),
 		Proxy:          flag.Bool("proxy", false, "Enable internal proxy."),
